@@ -52,4 +52,5 @@
 
 - 本地开发直接访问 `http://127.0.0.1:47831`
 - 公网访问统一走 `https://desk.example.com`
+- 当前推荐通过命令行参数或系统服务启动 `cloudflared`，不依赖仓库内配置文件
 - 如果未来切换 GitHub / Google / 其他 IdP，只改 Cloudflare Access，不改应用代码

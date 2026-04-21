@@ -1,7 +1,0 @@
-tunnel: <your-tunnel-id>
-credentials-file: C:\Users\<your-user>\.cloudflared\<your-tunnel-id>.json
-
-ingress:
-  - hostname: desk.example.com
-    service: http://127.0.0.1:47831
-  - service: http_status:404
