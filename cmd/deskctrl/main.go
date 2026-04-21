@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"deskctrl/internal/backend"
@@ -24,6 +25,14 @@ type app struct {
 
 type volumePayload struct {
 	Level int `json:"level"`
+}
+
+type piPromptPayload struct {
+	Prompt string `json:"prompt"`
+}
+
+type piResultPayload struct {
+	Result string `json:"result"`
 }
 
 func main() {
@@ -48,6 +57,7 @@ func main() {
 	)
 	mux.HandleFunc("/api/screenshot", app.handleScreenshot)
 	mux.HandleFunc("/api/volume", app.handleVolume)
+	mux.HandleFunc("/api/pi", app.handlePi)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -119,6 +129,40 @@ func (a *app) handleVolume(w http.ResponseWriter, r *http.Request) {
 	default:
 		methodNotAllowed(w, http.MethodGet, http.MethodPost)
 	}
+}
+
+func (a *app) handlePi(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
+
+	var payload piPromptPayload
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("invalid JSON payload"))
+		return
+	}
+
+	payload.Prompt = strings.TrimSpace(payload.Prompt)
+	if payload.Prompt == "" {
+		writeError(w, http.StatusBadRequest, errors.New("prompt is required"))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+
+	result, err := a.system.RunPiPrompt(ctx, payload.Prompt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, piResultPayload{Result: result})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

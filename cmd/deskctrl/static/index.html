@@ -111,6 +111,10 @@
         padding: 16px;
       }
 
+      .wide-panel {
+        padding: 16px;
+      }
+
       .panel-head {
         display: flex;
         justify-content: space-between;
@@ -217,6 +221,53 @@
         color: #176c3a;
       }
 
+      .pi-form {
+        display: grid;
+        gap: 12px;
+      }
+
+      .pi-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 132px;
+        padding: 14px 16px;
+        border: 1px solid rgba(67, 49, 36, 0.16);
+        border-radius: 18px;
+        background: rgba(255, 252, 246, 0.9);
+        color: var(--text);
+        font: inherit;
+        resize: vertical;
+      }
+
+      .result-wrap {
+        margin-top: 14px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .result-wrap[hidden] {
+        display: none;
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow: auto;
+        border-radius: 18px;
+        border: 1px solid rgba(67, 49, 36, 0.1);
+        background: #231a17;
+        color: #f8efe5;
+        font-family: "IBM Plex Mono", "Cascadia Code", monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
       @media (min-width: 900px) {
         main {
           width: min(1120px, calc(100% - 32px));
@@ -266,7 +317,7 @@
             <h2>状态</h2>
             <span id="last-sync" class="meta">未同步</span>
           </div>
-          <div id="status" class="status">等待首次加载…</div>
+          <div id="status" class="status">点击对应按钮后才会刷新音量或截图。</div>
         </section>
       </aside>
 
@@ -284,6 +335,28 @@
           <img id="screen-image" alt="当前桌面截图" />
         </div>
       </section>
+
+      <section class="panel wide-panel" style="grid-column: 1 / -1">
+        <div class="panel-head">
+          <div class="screen-title">
+            <h2>Pi 提示词运行</h2>
+            <span id="pi-time" class="meta">尚未运行</span>
+          </div>
+        </div>
+        <div class="pi-form">
+          <textarea
+            id="pi-prompt"
+            placeholder="输入提示词，后端会执行 pi -p &lt;提示词&gt;"
+          ></textarea>
+          <div class="pi-actions">
+            <button id="run-pi" class="primary">运行 Pi</button>
+          </div>
+        </div>
+        <div id="pi-result-wrap" class="result-wrap" hidden>
+          <span class="meta">结果</span>
+          <pre id="pi-result">等待运行…</pre>
+        </div>
+      </section>
     </main>
 
     <script>
@@ -296,6 +369,11 @@
       const screenImage = document.querySelector("#screen-image");
       const screenshotButton = document.querySelector("#refresh-screenshot");
       const volumeButton = document.querySelector("#refresh-volume");
+      const piPrompt = document.querySelector("#pi-prompt");
+      const piButton = document.querySelector("#run-pi");
+      const piResultWrap = document.querySelector("#pi-result-wrap");
+      const piResult = document.querySelector("#pi-result");
+      const piTimeNode = document.querySelector("#pi-time");
 
       let volumeTimer = null;
       let dragging = false;
@@ -326,17 +404,12 @@
         return body;
       }
 
-      async function refreshVolume({ silent = false } = {}) {
-        if (!silent) {
-          setStatus("读取当前系统音量…");
-        }
-
+      async function refreshVolume() {
+        setStatus("读取当前系统音量…");
         const data = await readJson("/api/volume");
         paintVolume(data.level);
         lastSyncNode.textContent = nowText();
-        if (!silent) {
-          setStatus("音量已同步。", "ok");
-        }
+        setStatus("音量已同步。", "ok");
       }
 
       async function setVolume(level) {
@@ -365,6 +438,29 @@
         screenshotTimeNode.textContent = nowText();
         setStatus("截图已刷新。", "ok");
         screenshotButton.disabled = false;
+      }
+
+      async function runPiPrompt() {
+        const prompt = piPrompt.value.trim();
+        if (!prompt) {
+          throw new Error("请先输入提示词");
+        }
+
+        piButton.disabled = true;
+        setStatus("正在运行 pi…");
+        piResultWrap.hidden = false;
+        piResult.textContent = "运行中…";
+
+        const data = await readJson("/api/pi", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+
+        piResult.textContent = data.result || "";
+        piTimeNode.textContent = nowText();
+        setStatus("Pi 已返回结果。", "ok");
+        piButton.disabled = false;
       }
 
       function scheduleVolumeWrite(level) {
@@ -405,17 +501,14 @@
         });
       });
 
-      window.setInterval(() => {
-        if (dragging) {
-          return;
-        }
-        refreshVolume({ silent: true }).catch(() => {});
-      }, 3000);
-
-      Promise.all([refreshScreenshot(), refreshVolume()])
-        .catch((error) => {
+      piButton.addEventListener("click", () => {
+        runPiPrompt().catch((error) => {
+          piButton.disabled = false;
+          piResult.textContent = error.message;
           setStatus(error.message, "error");
         });
+      });
+
     </script>
   </body>
 </html>

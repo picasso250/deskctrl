@@ -13,6 +13,7 @@ import (
 type System struct {
 	pwshPath   string
 	scriptsDir string
+	homeDir    string
 }
 
 func NewSystem(pwshPath string) (*System, error) {
@@ -21,9 +22,15 @@ func NewSystem(pwshPath string) (*System, error) {
 		return nil, err
 	}
 
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve home directory: %w", err)
+	}
+
 	return &System{
 		pwshPath:   pwshPath,
 		scriptsDir: scriptsDir,
+		homeDir:    homeDir,
 	}, nil
 }
 
@@ -78,6 +85,22 @@ func (s *System) SetVolume(ctx context.Context, level int) (int, error) {
 	}
 
 	return updatedLevel, nil
+}
+
+func (s *System) RunPiPrompt(ctx context.Context, prompt string) (string, error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return "", fmt.Errorf("prompt is required")
+	}
+
+	cmd := exec.CommandContext(ctx, "pi", "-p", prompt)
+	cmd.Dir = s.homeDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("run pi: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+
+	return strings.TrimSpace(string(output)), nil
 }
 
 func (s *System) runScript(ctx context.Context, scriptName string, args ...string) (string, error) {
