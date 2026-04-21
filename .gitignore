@@ -1,0 +1,6 @@
+.tmp/
+.wrangler/
+*.log
+*.exe
+*.exe~
+cloudflared-deskctrl.yml

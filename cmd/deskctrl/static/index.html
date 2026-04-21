@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DeskCtrl</title>
+    <style>
+      :root {
+        --bg: #f4efe8;
+        --panel: rgba(255, 252, 246, 0.86);
+        --panel-strong: rgba(255, 248, 238, 0.96);
+        --text: #1f2328;
+        --muted: #6a6259;
+        --accent: #cb5c31;
+        --accent-deep: #973b1d;
+        --border: rgba(67, 49, 36, 0.14);
+        --shadow: 0 24px 60px rgba(73, 45, 24, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(244, 161, 78, 0.22), transparent 34%),
+          radial-gradient(circle at top right, rgba(203, 92, 49, 0.18), transparent 28%),
+          linear-gradient(180deg, #f7f1e9 0%, #efe6db 100%);
+      }
+
+      main {
+        width: min(1120px, calc(100% - 24px));
+        margin: 12px auto 24px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero {
+        padding: 20px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      .eyebrow {
+        color: var(--accent-deep);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .title {
+        margin-top: 10px;
+        font-size: clamp(28px, 4vw, 42px);
+        line-height: 1.04;
+      }
+
+      .subtitle {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font: inherit;
+        cursor: pointer;
+        transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+      }
+
+      button:disabled {
+        opacity: 0.56;
+        cursor: wait;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .primary {
+        background: linear-gradient(135deg, var(--accent) 0%, #db8645 100%);
+        color: #fff;
+      }
+
+      .secondary {
+        background: rgba(34, 30, 24, 0.08);
+        color: var(--text);
+      }
+
+      .screen-panel {
+        padding: 16px;
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .screen-panel .panel-head {
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .screen-title {
+        display: grid;
+        gap: 4px;
+      }
+
+      .screen-tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .inline-tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .screen-wrap {
+        overflow: hidden;
+        border-radius: 18px;
+        border: 1px solid rgba(21, 24, 28, 0.08);
+        background: #231a17;
+        aspect-ratio: 4 / 3;
+      }
+
+      .screen-wrap img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
+      }
+
+      .side {
+        padding: 18px;
+        display: grid;
+        gap: 18px;
+        align-content: start;
+      }
+
+      .stat-card,
+      .control-card {
+        padding: 18px;
+        border-radius: 20px;
+        background: var(--panel-strong);
+        border: 1px solid rgba(67, 49, 36, 0.1);
+      }
+
+      .volume-value {
+        margin-top: 8px;
+        font-size: clamp(42px, 6vw, 68px);
+        line-height: 1;
+        font-weight: 700;
+      }
+
+      .hint {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .slider-row {
+        margin-top: 18px;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+
+      .status {
+        min-height: 22px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .status.error {
+        color: #b42318;
+      }
+
+      .status.ok {
+        color: #176c3a;
+      }
+
+      @media (min-width: 900px) {
+        main {
+          width: min(1120px, calc(100% - 32px));
+          margin: 24px auto;
+          grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.9fr);
+          gap: 20px;
+        }
+
+        .screen-wrap {
+          aspect-ratio: 16 / 10;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="panel hero">
+        <p class="eyebrow">Local Control Surface</p>
+        <h1 class="title">DeskCtrl</h1>
+        <p class="subtitle">
+          当前桌面截图和系统主音量都走本地接口。前端只做查看与控制，系统操作由后端转调本机能力脚本。
+        </p>
+      </section>
+
+      <aside class="panel side">
+        <section class="stat-card">
+          <p class="eyebrow">Master Volume</p>
+          <div id="volume-value" class="volume-value">--</div>
+          <p class="hint">滑块变化后会立即写回系统主音量。</p>
+        </section>
+
+        <section class="control-card">
+          <div class="panel-head">
+            <h2>音量控制</h2>
+            <div class="inline-tools">
+              <span id="slider-label" class="meta">--%</span>
+              <button id="refresh-volume" class="secondary">刷新音量</button>
+            </div>
+          </div>
+          <div class="slider-row">
+            <input id="volume-slider" type="range" min="0" max="100" value="0" />
+          </div>
+        </section>
+
+        <section class="control-card">
+          <div class="panel-head">
+            <h2>状态</h2>
+            <span id="last-sync" class="meta">未同步</span>
+          </div>
+          <div id="status" class="status">等待首次加载…</div>
+        </section>
+      </aside>
+
+      <section class="panel screen-panel" style="grid-column: 1 / -1">
+        <div class="panel-head">
+          <div class="screen-title">
+            <h2>当前桌面截图</h2>
+            <span id="screenshot-time" class="meta">尚未刷新</span>
+          </div>
+          <div class="screen-tools">
+            <button id="refresh-screenshot" class="primary">刷新截图</button>
+          </div>
+        </div>
+        <div class="screen-wrap">
+          <img id="screen-image" alt="当前桌面截图" />
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const slider = document.querySelector("#volume-slider");
+      const volumeValue = document.querySelector("#volume-value");
+      const sliderLabel = document.querySelector("#slider-label");
+      const statusNode = document.querySelector("#status");
+      const lastSyncNode = document.querySelector("#last-sync");
+      const screenshotTimeNode = document.querySelector("#screenshot-time");
+      const screenImage = document.querySelector("#screen-image");
+      const screenshotButton = document.querySelector("#refresh-screenshot");
+      const volumeButton = document.querySelector("#refresh-volume");
+
+      let volumeTimer = null;
+      let dragging = false;
+
+      function nowText() {
+        return new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      }
+
+      function setStatus(message, kind = "") {
+        statusNode.textContent = message;
+        statusNode.className = `status ${kind}`.trim();
+      }
+
+      function paintVolume(level) {
+        volumeValue.textContent = `${level}%`;
+        sliderLabel.textContent = `${level}%`;
+        if (!dragging) {
+          slider.value = level;
+        }
+      }
+
+      async function readJson(url, options) {
+        const response = await fetch(url, options);
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || `HTTP ${response.status}`);
+        }
+        return body;
+      }
+
+      async function refreshVolume({ silent = false } = {}) {
+        if (!silent) {
+          setStatus("读取当前系统音量…");
+        }
+
+        const data = await readJson("/api/volume");
+        paintVolume(data.level);
+        lastSyncNode.textContent = nowText();
+        if (!silent) {
+          setStatus("音量已同步。", "ok");
+        }
+      }
+
+      async function setVolume(level) {
+        const data = await readJson("/api/volume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ level }),
+        });
+
+        paintVolume(data.level);
+        lastSyncNode.textContent = nowText();
+        setStatus(`系统音量已设置为 ${data.level}%。`, "ok");
+      }
+
+      async function refreshScreenshot() {
+        screenshotButton.disabled = true;
+        setStatus("抓取桌面截图…");
+
+        const url = `/api/screenshot?t=${Date.now()}`;
+        await new Promise((resolve, reject) => {
+          screenImage.onload = resolve;
+          screenImage.onerror = () => reject(new Error("截图加载失败"));
+          screenImage.src = url;
+        });
+
+        screenshotTimeNode.textContent = nowText();
+        setStatus("截图已刷新。", "ok");
+        screenshotButton.disabled = false;
+      }
+
+      function scheduleVolumeWrite(level) {
+        window.clearTimeout(volumeTimer);
+        volumeTimer = window.setTimeout(() => {
+          setVolume(level).catch((error) => {
+            setStatus(error.message, "error");
+          });
+        }, 120);
+      }
+
+      slider.addEventListener("pointerdown", () => {
+        dragging = true;
+      });
+
+      slider.addEventListener("pointerup", () => {
+        dragging = false;
+      });
+
+      slider.addEventListener("input", () => {
+        const level = Number(slider.value);
+        volumeValue.textContent = `${level}%`;
+        sliderLabel.textContent = `${level}%`;
+        setStatus(`准备设置系统音量到 ${level}%…`);
+        scheduleVolumeWrite(level);
+      });
+
+      screenshotButton.addEventListener("click", () => {
+        refreshScreenshot().catch((error) => {
+          screenshotButton.disabled = false;
+          setStatus(error.message, "error");
+        });
+      });
+
+      volumeButton.addEventListener("click", () => {
+        refreshVolume().catch((error) => {
+          setStatus(error.message, "error");
+        });
+      });
+
+      window.setInterval(() => {
+        if (dragging) {
+          return;
+        }
+        refreshVolume({ silent: true }).catch(() => {});
+      }, 3000);
+
+      Promise.all([refreshScreenshot(), refreshVolume()])
+        .catch((error) => {
+          setStatus(error.message, "error");
+        });
+    </script>
+  </body>
+</html>
