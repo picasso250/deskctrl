@@ -299,6 +299,57 @@
         word-break: break-word;
       }
 
+      .file-path {
+        margin-top: 4px;
+        max-width: min(100%, 760px);
+        overflow-wrap: anywhere;
+      }
+
+      .file-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .file-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 4px;
+        padding: 12px 14px;
+        border: 1px solid rgba(67, 49, 36, 0.12);
+        border-radius: 16px;
+        background: rgba(255, 252, 246, 0.72);
+        color: var(--text);
+        text-align: left;
+      }
+
+      .file-row[data-type="dir"] {
+        cursor: pointer;
+      }
+
+      .file-row[data-type="file"] {
+        cursor: default;
+      }
+
+      .file-row:disabled {
+        opacity: 1;
+        cursor: default;
+      }
+
+      .file-row:hover[data-type="dir"] {
+        transform: translateY(-1px);
+      }
+
+      .file-name {
+        overflow-wrap: anywhere;
+        font-weight: 700;
+      }
+
+      .file-meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
       @media (min-width: 900px) {
         main {
           width: min(1120px, calc(100% - 32px));
@@ -411,6 +462,22 @@
           <pre id="pi-result">等待运行…</pre>
         </div>
       </section>
+
+      <section class="panel wide-panel" style="grid-column: 1 / -1">
+        <div class="panel-head">
+          <div class="screen-title">
+            <h2>文件浏览</h2>
+            <span id="file-path" class="meta file-path">尚未加载</span>
+          </div>
+          <div class="screen-tools">
+            <button id="file-parent" class="secondary" disabled>上一级</button>
+            <button id="refresh-files" class="primary">刷新文件</button>
+          </div>
+        </div>
+        <div id="file-list" class="file-list">
+          <div class="meta">点击刷新后显示家目录文件列表。</div>
+        </div>
+      </section>
     </main>
 
     <script>
@@ -429,9 +496,15 @@
       const piResult = document.querySelector("#pi-result");
       const piTimeNode = document.querySelector("#pi-time");
       const runnerInputs = Array.from(document.querySelectorAll("input[name='runner']"));
+      const filePathNode = document.querySelector("#file-path");
+      const fileListNode = document.querySelector("#file-list");
+      const fileParentButton = document.querySelector("#file-parent");
+      const refreshFilesButton = document.querySelector("#refresh-files");
 
       let volumeTimer = null;
       let dragging = false;
+      let currentFilePath = "";
+      let parentFilePath = "";
 
       function nowText() {
         return new Date().toLocaleTimeString("zh-CN", { hour12: false });
@@ -519,6 +592,81 @@
         piButton.disabled = false;
       }
 
+      function formatBytes(size) {
+        if (!size) {
+          return "0 B";
+        }
+        const units = ["B", "KB", "MB", "GB"];
+        let value = size;
+        let unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.length - 1) {
+          value = value / 1024;
+          unitIndex += 1;
+        }
+        return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+      }
+
+      function formatFileTime(value) {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {
+          return "";
+        }
+        return date.toLocaleString("zh-CN", { hour12: false });
+      }
+
+      function renderFiles(data) {
+        currentFilePath = data.path || "";
+        parentFilePath = data.parent || "";
+        filePathNode.textContent = currentFilePath || "家目录";
+        fileParentButton.disabled = !parentFilePath;
+
+        fileListNode.replaceChildren();
+        if (!data.entries || data.entries.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "meta";
+          empty.textContent = "没有可显示的文件。";
+          fileListNode.append(empty);
+          return;
+        }
+
+        for (const entry of data.entries) {
+          const row = document.createElement("button");
+          row.className = "file-row";
+          row.dataset.type = entry.type;
+          row.type = "button";
+          row.disabled = entry.type !== "dir";
+
+          const name = document.createElement("span");
+          name.className = "file-name";
+          name.textContent = `${entry.type === "dir" ? "目录" : "文件"} · ${entry.name}`;
+
+          const meta = document.createElement("span");
+          meta.className = "file-meta";
+          const size = entry.type === "dir" ? "" : ` · ${formatBytes(entry.size)}`;
+          meta.textContent = `${formatFileTime(entry.modified)}${size}`;
+
+          row.append(name, meta);
+          if (entry.type === "dir") {
+            row.addEventListener("click", () => {
+              loadFiles(entry.path).catch((error) => {
+                setStatus(error.message, "error");
+              });
+            });
+          }
+          fileListNode.append(row);
+        }
+      }
+
+      async function loadFiles(path = currentFilePath) {
+        refreshFilesButton.disabled = true;
+        setStatus("读取文件列表…");
+        const query = path ? `?path=${encodeURIComponent(path)}` : "";
+        const data = await readJson(`/api/files${query}`);
+        renderFiles(data);
+        setStatus("文件列表已刷新。", "ok");
+        refreshFilesButton.disabled = false;
+      }
+
       function scheduleVolumeWrite(level) {
         window.clearTimeout(volumeTimer);
         volumeTimer = window.setTimeout(() => {
@@ -561,6 +709,24 @@
         runPiPrompt().catch((error) => {
           piButton.disabled = false;
           piResult.textContent = error.message;
+          setStatus(error.message, "error");
+        });
+      });
+
+      refreshFilesButton.addEventListener("click", () => {
+        loadFiles().catch((error) => {
+          refreshFilesButton.disabled = false;
+          setStatus(error.message, "error");
+        });
+      });
+
+      fileParentButton.addEventListener("click", () => {
+        if (!parentFilePath) {
+          return;
+        }
+
+        loadFiles(parentFilePath).catch((error) => {
+          refreshFilesButton.disabled = false;
           setStatus(error.message, "error");
         });
       });

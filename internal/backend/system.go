@@ -6,14 +6,30 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type System struct {
 	pwshPath   string
 	scriptsDir string
 	homeDir    string
+}
+
+type FileListing struct {
+	Path    string      `json:"path"`
+	Parent  string      `json:"parent,omitempty"`
+	Entries []FileEntry `json:"entries"`
+}
+
+type FileEntry struct {
+	Name     string    `json:"name"`
+	Path     string    `json:"path"`
+	Type     string    `json:"type"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified"`
 }
 
 func NewSystem(pwshPath string) (*System, error) {
@@ -87,6 +103,73 @@ func (s *System) SetVolume(ctx context.Context, level int) (int, error) {
 	return updatedLevel, nil
 }
 
+func (s *System) ListFiles(path string) (FileListing, error) {
+	targetPath, err := s.resolveHomePath(path)
+	if err != nil {
+		return FileListing{}, err
+	}
+
+	entries, err := os.ReadDir(targetPath)
+	if err != nil {
+		return FileListing{}, fmt.Errorf("read directory: %w", err)
+	}
+
+	listing := FileListing{
+		Path:    targetPath,
+		Entries: make([]FileEntry, 0, len(entries)),
+	}
+
+	if parent := filepath.Dir(targetPath); parent != targetPath {
+		if s.isInsideHome(parent) {
+			listing.Parent = parent
+		}
+	}
+
+	for _, entry := range entries {
+		if shouldHideFile(entry.Name()) {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		mode := info.Mode()
+		if mode&os.ModeSymlink != 0 {
+			continue
+		}
+
+		entryType := "file"
+		size := info.Size()
+		if entry.IsDir() {
+			entryType = "dir"
+			size = 0
+		} else if !mode.IsRegular() {
+			continue
+		}
+
+		listing.Entries = append(listing.Entries, FileEntry{
+			Name:     entry.Name(),
+			Path:     filepath.Join(targetPath, entry.Name()),
+			Type:     entryType,
+			Size:     size,
+			Modified: info.ModTime(),
+		})
+	}
+
+	sort.Slice(listing.Entries, func(i, j int) bool {
+		left := listing.Entries[i]
+		right := listing.Entries[j]
+		if left.Type != right.Type {
+			return left.Type == "dir"
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	})
+
+	return listing, nil
+}
+
 func (s *System) RunPrompt(ctx context.Context, runner string, prompt string) (string, error) {
 	runner = strings.TrimSpace(strings.ToLower(runner))
 	prompt = strings.TrimSpace(prompt)
@@ -112,6 +195,40 @@ func (s *System) RunPrompt(ctx context.Context, runner string, prompt string) (s
 	}
 
 	return strings.TrimSpace(string(output)), nil
+}
+
+func (s *System) resolveHomePath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return filepath.Clean(s.homeDir), nil
+	}
+
+	targetPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	targetPath = filepath.Clean(targetPath)
+	if !s.isInsideHome(targetPath) {
+		return "", fmt.Errorf("path is outside home directory")
+	}
+
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return "", fmt.Errorf("stat path: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("path is not a directory")
+	}
+
+	return targetPath, nil
+}
+
+func (s *System) isInsideHome(path string) bool {
+	rel, err := filepath.Rel(filepath.Clean(s.homeDir), filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
 
 func (s *System) runScript(ctx context.Context, scriptName string, args ...string) (string, error) {
@@ -170,5 +287,23 @@ func clampLevel(level int) int {
 		return 100
 	default:
 		return level
+	}
+}
+
+func shouldHideFile(name string) bool {
+	lowerName := strings.ToLower(name)
+	if strings.HasPrefix(lowerName, ".") {
+		return true
+	}
+
+	if lowerName == "appdata" || lowerName == "ntuser.ini" || strings.HasPrefix(lowerName, "ntuser.dat") {
+		return true
+	}
+
+	switch lowerName {
+	case "cloudflared-deskctrl.yml", ".git-credentials":
+		return true
+	default:
+		return false
 	}
 }

@@ -59,6 +59,7 @@ func main() {
 	mux.HandleFunc("/api/screenshot", app.handleScreenshot)
 	mux.HandleFunc("/api/volume", app.handleVolume)
 	mux.HandleFunc("/api/pi", app.handlePi)
+	mux.HandleFunc("/api/files", app.handleFiles)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -164,6 +165,21 @@ func (a *app) handlePi(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, piResultPayload{Result: result})
+}
+
+func (a *app) handleFiles(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		methodNotAllowed(w, http.MethodGet)
+		return
+	}
+
+	listing, err := a.system.ListFiles(r.URL.Query().Get("path"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, listing)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
