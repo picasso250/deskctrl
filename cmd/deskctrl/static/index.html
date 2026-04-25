@@ -226,6 +226,37 @@
         gap: 12px;
       }
 
+      .runner-row {
+        display: grid;
+        gap: 8px;
+      }
+
+      .runner-options {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .runner-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px solid rgba(67, 49, 36, 0.14);
+        border-radius: 16px;
+        background: rgba(255, 252, 246, 0.7);
+        cursor: pointer;
+      }
+
+      .runner-option input {
+        accent-color: var(--accent);
+      }
+
+      .runner-option span {
+        display: grid;
+        gap: 2px;
+      }
+
       .pi-actions {
         display: flex;
         justify-content: flex-end;
@@ -278,6 +309,10 @@
 
         .screen-wrap {
           aspect-ratio: 16 / 10;
+        }
+
+        .runner-options {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
     </style>
@@ -344,12 +379,31 @@
           </div>
         </div>
         <div class="pi-form">
+          <div class="runner-row">
+            <span class="meta">运行方式</span>
+            <div class="runner-options">
+              <label class="runner-option">
+                <input type="radio" name="runner" value="pi" checked />
+                <span>
+                  <strong>pi</strong>
+                  <small class="meta">pi -p &lt;提示词&gt;</small>
+                </span>
+              </label>
+              <label class="runner-option">
+                <input type="radio" name="runner" value="codex" />
+                <span>
+                  <strong>codex</strong>
+                  <small class="meta">codex &lt;提示词&gt;</small>
+                </span>
+              </label>
+            </div>
+          </div>
           <textarea
             id="pi-prompt"
-            placeholder="输入提示词，后端会执行 pi -p &lt;提示词&gt;"
+            placeholder="输入提示词，然后选择运行方式"
           ></textarea>
           <div class="pi-actions">
-            <button id="run-pi" class="primary">运行 Pi</button>
+            <button id="run-pi" class="primary">运行</button>
           </div>
         </div>
         <div id="pi-result-wrap" class="result-wrap" hidden>
@@ -374,6 +428,7 @@
       const piResultWrap = document.querySelector("#pi-result-wrap");
       const piResult = document.querySelector("#pi-result");
       const piTimeNode = document.querySelector("#pi-time");
+      const runnerInputs = Array.from(document.querySelectorAll("input[name='runner']"));
 
       let volumeTimer = null;
       let dragging = false;
@@ -446,20 +501,21 @@
           throw new Error("请先输入提示词");
         }
 
+        const runner = runnerInputs.find((input) => input.checked)?.value || "pi";
         piButton.disabled = true;
-        setStatus("正在运行 pi…");
+        setStatus(`正在运行 ${runner}…`);
         piResultWrap.hidden = false;
         piResult.textContent = "运行中…";
 
         const data = await readJson("/api/pi", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ prompt, runner }),
         });
 
         piResult.textContent = data.result || "";
         piTimeNode.textContent = nowText();
-        setStatus("Pi 已返回结果。", "ok");
+        setStatus(`${runner} 已返回结果。`, "ok");
         piButton.disabled = false;
       }
 

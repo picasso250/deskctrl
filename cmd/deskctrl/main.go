@@ -29,6 +29,7 @@ type volumePayload struct {
 
 type piPromptPayload struct {
 	Prompt string `json:"prompt"`
+	Runner string `json:"runner"`
 }
 
 type piResultPayload struct {
@@ -156,7 +157,7 @@ func (a *app) handlePi(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
-	result, err := a.system.RunPiPrompt(ctx, payload.Prompt)
+	result, err := a.system.RunPrompt(ctx, payload.Runner, payload.Prompt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return

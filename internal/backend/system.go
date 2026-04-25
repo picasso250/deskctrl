@@ -87,17 +87,28 @@ func (s *System) SetVolume(ctx context.Context, level int) (int, error) {
 	return updatedLevel, nil
 }
 
-func (s *System) RunPiPrompt(ctx context.Context, prompt string) (string, error) {
+func (s *System) RunPrompt(ctx context.Context, runner string, prompt string) (string, error) {
+	runner = strings.TrimSpace(strings.ToLower(runner))
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return "", fmt.Errorf("prompt is required")
 	}
 
-	cmd := exec.CommandContext(ctx, "pi", "-p", prompt)
+	var cmd *exec.Cmd
+	switch runner {
+	case "", "pi":
+		cmd = exec.CommandContext(ctx, "pi", "-p", prompt)
+		runner = "pi"
+	case "codex":
+		cmd = exec.CommandContext(ctx, "codex", prompt)
+	default:
+		return "", fmt.Errorf("unsupported runner %q", runner)
+	}
+
 	cmd.Dir = s.homeDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("run pi: %w: %s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("run %s: %w: %s", runner, err, strings.TrimSpace(string(output)))
 	}
 
 	return strings.TrimSpace(string(output)), nil
